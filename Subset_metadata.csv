@@ -1,0 +1,11 @@
+File Name,GSM #,Sample ID,Stage,Gender,Age,16S RNA sequencing,Metagenomic sequencing,Metabonomic analysis,Constipation
+SRR9666822,GSM3936619,A54,TD,Male,3,yes,Yes,Yes,No
+SRR9666843,GSM3936640,A76,TD,Male,3,yes,Yes,Yes,No
+SRR9666845,GSM3936642,A78,TD,Male,3,yes,Yes,Yes,No
+SRR9666853,GSM3936650,A87,TD,Male,3,yes,Yes,Yes,No
+SRR9666855,GSM3936652,A89,TD,Male,3,yes,Yes,Yes,No
+SRR9666891,GSM3936688,B127,Autism,Male,3,yes,Yes,Yes,Yes
+SRR9666907,GSM3936704,B143,Autism,Male,3,yes,Yes,Yes,Yes
+SRR9666916,GSM3936713,B152,Autism,Male,3,yes,Yes,Yes,Yes
+SRR9666920,GSM3936717,B156,Autism,Male,3,yes,Yes,Yes,Yes
+SRR9666935,GSM3936732,B2,Autism,Male,3,yes,Yes,Yes,Yes
