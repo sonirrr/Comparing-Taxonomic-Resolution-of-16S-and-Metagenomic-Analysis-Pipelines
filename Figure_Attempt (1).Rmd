@@ -1,0 +1,262 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+Here I am going to make a pipeline to replicate some of the findings reported in https://www.tandfonline.com/doi/full/10.1080/19490976.2020.1747329#d1e1343. 
+
+
+# 16S Data Analysis
+
+I will start with the author's provided OTU table. We had wanted to re-process all of their raw 16S data using DADA2, but the files they have uploaded to SRA seem to have already been merged, and DADA2 can not interpret merged reads. Instead, we will have to use the provided OTU table provided on Kaggle (https://www.kaggle.com/datasets/antaresnyc/human-gut-microbiome-with-asd/data/discussion?select=GSE113690_Autism_16S_rRNA_OTU_assignment_and_abundance.csv)
+
+I am going to use different tools/processing than the authors used in many cases and we will see if the results I obtain look similar. 
+
+Ultimately, I want to generate key figures that we can also generate using metagenomic data for comparison purposes. 
+```{r}
+library(phyloseq)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(MiscMetabar)
+library(ggVennDiagram)
+library(tidyverse)
+library(tibble)
+library(breakaway)
+```
+
+```{r}
+#Create Phyloseq Object
+otu_table_data <- read.csv("/Users/cmdb/qb25-answers/DADA2_Subset_Attempt1_files/OTU_Table.csv", row.names = 1)
+metadata_table_data <- read.csv("/Users/cmdb/qb25-answers/DADA2_Subset_Attempt1_files/Metadata_Table.csv", row.names = 1)
+tax_table_data <- read.csv("/Users/cmdb/qb25-answers/DADA2_Subset_Attempt1_files/OTU_Taxonomy_Table.csv", row.names = 1)
+
+PS <- phyloseq(
+  otu_table(as.matrix(otu_table_data), taxa_are_rows = TRUE), 
+  sample_data(metadata_table_data),
+  tax_table(as.matrix(tax_table_data)))
+```
+
+```{r}
+#They claim to use the BreakAway package to estimate species richness
+PS_genus <- tax_glom(PS, taxrank = "Genus")
+PS_phylum <- tax_glom(PS, taxrank = "Phylum")
+estimated_richness1 <- breakaway(PS_genus)
+
+# ChatGPT gave me this step to convert the breakaway output to a tibble so I can left_join my sample data so I can color by Stage
+richness_df <- tibble(
+  sample_id = names(estimated_richness1),
+  estimate  = vapply(estimated_richness1, function(x) x$estimate, numeric(1)),
+  error     = vapply(estimated_richness1, function(x) if (!is.null(x$error)) x$error else NA_real_, numeric(1)),
+  lower     = vapply(estimated_richness1, function(x) if (!is.null(x$interval)) x$interval[1] else NA_real_, numeric(1)),
+  upper     = vapply(estimated_richness1, function(x) if (!is.null(x$interval)) x$interval[2] else NA_real_, numeric(1)),
+  method    = vapply(estimated_richness1, function(x) if (!is.null(x$name)) x$name else NA_character_, character(1))
+)
+
+sdat <- phyloseq::sample_data(PS_genus) %>%
+  as("data.frame") %>%
+  rownames_to_column("sample_id") %>%
+  select(sample_id, Stage)
+
+richness_df <- left_join(richness_df, sdat, by = "sample_id")
+
+# Plot
+ggplot(richness_df, aes(x = Stage, y = estimate, fill = Stage)) +
+  geom_boxplot(alpha = 0.35, outlier.shape = NA) +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.85) +
+  labs(x = "Stage", y = "Breakaway genus richness", title = "Estimated richness by Stage") +
+  theme_classic(base_size = 14) +
+  theme(legend.position = "none")
+```
+There seems to be a huge outlier. Let me take a look at that...
+```{r}
+richness_df <- richness_df %>%
+  mutate(rel_error = error / estimate)
+richness_df %>% arrange(desc(estimate)) %>% head()
+richness_df %>% arrange(desc(rel_error)) %>% head()
+```
+This does not look right at all. I think what is happening is that the table I have from the authors has already been rarefied (all total counts acorss samples are equal)
+```{r}
+head(colSums(otu_table(PS)))
+```
+All samples have 31757 reads. I am pretty sure that rarefying does this (makes all total counts equal to each other). I researched it and I do not think Breakaway can work on already rarefied data. So either the authors did this breakaway analysis and then rarefied, and then only uploaded the rareified data - or - they did not actually use the breakaway package. 
+
+Instead I will do some orthogonal analyses using different tools. Here I will use the built in shannon diversity and simpsom diversity measurements from the Phyloseq package.
+```{r}
+theme_set(theme_bw())
+plot_richness(PS, x="Stage", measures=c("Shannon", "Simpson"), color="Constipation") +
+  geom_boxplot(alpha = 0.3, color = "black") +
+  theme(legend.position="right") +
+  labs(title = "Species")
+
+plot_richness(PS_genus, x="Stage", measures=c("Shannon", "Simpson"), color="Constipation") +
+  geom_boxplot(alpha = 0.3, color = "black") +
+  theme(legend.position="right") +
+  labs(title = "Genus")
+
+
+plot_richness(PS_phylum, x="Stage", measures=c("Shannon", "Simpson"), color="Constipation") +
+ geom_boxplot(alpha = 0.3, color = "black") +
+  theme(legend.position="right") +
+  labs(title = "Phylum")
+```
+It would be nice to add in some statistics. But by eye it looks like the analyses could be similar. 
+
+Now I'll try with just genus/phylum count:
+```{r}
+# Extract OTU table
+otu_table_genus <- as(otu_table(PS_genus), "matrix")
+otu_table_phylum <- as(otu_table(PS_phylum), "matrix")
+
+# Sum down columns → number of genera/phyla per sample
+genus_richness <- colSums(otu_table_genus > 0)
+phylum_richness <- colSums(otu_table_phylum > 0)
+
+# Add Genus/PhylumRichness to sample_data(PS_genus)
+sample_data(PS_genus)$GenusRichness <- genus_richness[sample_names(PS_genus)]
+sample_data(PS_phylum)$PhylumRichness <- phylum_richness[sample_names(PS_phylum)]
+
+# PLot
+ggplot(sample_data(PS_genus), aes(x = Stage, y = GenusRichness, color = Constipation)) +
+  geom_boxplot() +
+  geom_jitter(width = 0.2, size = 2.5, alpha = 0.8) +
+  labs(x = "Stage", y = "Genus richness (# unique genera)") +
+  theme_classic(base_size = 14)
+ggplot(sample_data(PS_phylum), aes(x = Stage, y = PhylumRichness, color = Constipation)) +
+  geom_boxplot() +
+  geom_jitter(width = 0.2, size = 2.5, alpha = 0.8) +
+  labs(x = "Stage", y = "Phylum richness (# unique phyla)") +
+  theme_classic(base_size = 14)
+
+```
+Again these look like they could be similar to the author's original figures just by eye, but I need to add statistical analysis to be sure. 
+Now I'll try to recreate the venn diagram they have of unique OTUs across groups.
+```{r}
+ggvenn_pq(physeq = PS, fact = "Stage", type = "nb_taxa",
+          set_name_size = 10,   # size of group labels
+          label_size = 3) +     # size of intersection counts
+  theme(text = element_text(hjust = 0.3)) +
+  coord_cartesian(clip = "off")
+```
+This is not the same... While the number of total OTUs adds up to be the same as in the original figure, the subgroup totals are not the same. I am genuienly not sure why... It could be another artifact of rarification maybe?
+
+Now I will construct a relative adundance stacked bar chart. They did not do this exact analysis, but I want it for comparison purposes with the metagenomic data. I am going to filter out rare and low abundance OTUs for easy viewing.
+
+```{r}
+# filter out rare and low abundant taxa
+# Counts are already proportional (all samples have 31757)
+PS_relabund  = transform_sample_counts(PS, function(x) x / sum(x) )
+#Keep OTUs that are at least 1% of the relative abundance of each sample for at least (for 1 sample change to 0.003) (for 3 samples change to 0.01)
+wh0 = genefilter_sample(PS_relabund, filterfun_sample(function(x) x > 0.01), A=0.003*nsamples(PS_relabund))
+PS_relabund_filt = prune_taxa(wh0, PS_relabund)
+```
+
+```{r}
+# Check that taxa are filtered out
+ntaxa(PS_relabund); ntaxa(PS_relabund_filt)
+
+p<- plot_bar(PS_relabund_filt, x = "Sample", y = "Abundance", fill = "Genus", facet_grid = "Stage")
+p + geom_bar(aes(color=Genus, fill=Genus), stat="identity", position="stack") +
+  theme_minimal() 
+
+```
+```{r}
+# Check that taxa are filtered out
+ntaxa(PS_relabund); ntaxa(PS_relabund_filt)
+
+p<- plot_bar(PS_relabund_filt, x = "Sample", y = "Abundance", fill = "Phylum", facet_grid = "Stage")
+p + geom_bar(aes(color=Phylum, fill=Phylum), stat="identity", position="stack") +
+  theme_minimal() 
+
+```
+Now I will try to recreate the PCoA analysis they performed. They use "unweighted unifract distance" but I am not sure how they did that without generating a taxonomic tree (this slot of my phyloseq is currently empty). I could try to make one from scratch - but for now I will just use bray curtis dissimilarity for my distance.
+
+```{r}
+PS_relabund_filt.ord <- ordinate(PS_relabund_filt, "PCoA")
+PCoA1 = plot_ordination(PS_relabund_filt, PS_relabund_filt.ord, type="samples", color="Stage", title="taxa")
+PCoA1 + 
+  stat_ellipse(aes(fill = Stage), geom = "polygon", alpha = 0.2, color = NA) +
+  geom_point(size = 3) +
+  theme_classic()
+```
+This looks pretty similar to the PCoA/Bray they did in their supplemental data. It is not the one they chose to display in their main figure because it is not as striking of a result. Regardless, you can see a bit more heterogeneity in the TD group and a bit more clustering in the Autism group. I would hesitate to say that the groups are truly separated, but the authors do not claim this either.
+
+# Metagenomic Analysis
+
+Rishi is working to re-process the metagenomic data using MetaSpades. This is not what they authors used... We don't understand the analysis pipeline they claim to have used and they do a poor job of explaining it. Its not very reproducible :( <- sad face
+
+While we are waiting for our data processed with a different pipeline, I will generate some figures from the metagenomic reads data table also provided by the authors on Kaggle (https://www.kaggle.com/datasets/antaresnyc/human-gut-microbiome-with-asd/data/discussion?select=ASD+meta+abundance.csv)
+
+```{r}
+#Read in metagenomic data table
+metagenomic <- read.csv("/Users/cmdb/qb25-answers/DADA2_Subset_Attempt1_files/ASD meta abundance.csv", header = TRUE, check.names = FALSE)
+# Identify sample columns (everything except Genus and Species columns)
+sample_cols <- !(names(metagenomic) %in% c("Genus", "Species"))
+
+#make sure values are all numeric
+metagenomic[, sample_cols] <- lapply(metagenomic[, sample_cols], as.numeric)
+
+#OTU matrix
+otu_samples <- as.matrix(metagenomic[, sample_cols])
+
+#create concatenated names to stand in for "OTU names"
+rownames(otu_samples) <- make.unique(paste(metagenomic$Genus, metagenomic$Species, sep = "_"))
+otu_metagenomic <- otu_table(otu_samples, taxa_are_rows = TRUE)
+
+#Tax table (Genus + Species)
+tax_tab <- as.matrix(metagenomic[, c("Genus", "Species")])
+rownames(tax_tab) <- rownames(otu_samples)
+colnames(tax_tab) <- c("Genus", "Species")
+tax_metagenomic <- tax_table(tax_tab)
+
+#Add Sample metadata
+meta_16s <- as(sample_data(PS), "data.frame")   # from your 16S object
+meta_mg  <- meta_16s[colnames(otu_samples), , drop = FALSE]
+samp_metagenomic <- sample_data(meta_mg)
+
+#Build phyloseq object
+PS_metagenomic <- phyloseq(otu_metagenomic, tax_metagenomic, samp_metagenomic)
+```
+Okay so now the metagenomic phyloseq object is built. Lets start with just a simple richness graph to prove it's working.
+```{r}
+plot_richness(PS_metagenomic, x = "Stage",
+              measures = c("Shannon", "Simpson"),
+              color = "Constipation") +
+  geom_boxplot(alpha = 0.3, color = "black", outlier.shape = NA)
+```
+Lets make that venn diagram again:
+
+```{r}
+ggvenn_pq(physeq = PS_metagenomic, fact = "Stage", type = "nb_taxa",
+          set_name_size = 10,   # size of group labels
+          label_size = 3) +     # size of intersection counts
+  theme(text = element_text(hjust = 0.3)) +
+  coord_cartesian(clip = "off")
+```
+
+```{r}
+# filter out rare and low abundant taxa
+# Counts are already proportional (all samples have 31757)
+PS_meta_relabund  = transform_sample_counts(PS_metagenomic, function(x) x / sum(x) )
+#Keep OTUs that are at least 1% of the relative abundance of each sample for at least (for 1 sample change to 0.003) (for 3 samples change to 0.01)
+wh1 = genefilter_sample(PS_meta_relabund, filterfun_sample(function(x) x > 0.01), A=0.003*nsamples(PS_meta_relabund))
+PS_meta_relabund_filt = prune_taxa(wh1, PS_meta_relabund)
+
+# Check that taxa are filtered out
+ntaxa(PS_meta_relabund); ntaxa(PS_meta_relabund_filt)
+
+p1<- plot_bar(PS_meta_relabund_filt, x = "Sample", y = "Abundance", fill = "Genus", facet_grid = "Stage")
+p1 + geom_bar(aes(color=Genus, fill=Genus), stat="identity", position="stack") +
+  theme_minimal() 
+
+
+```
+
+```{r}
+PS_relabund_filt.ord <- ordinate(PS_relabund_filt, "PCoA")
+PCoA1 = plot_ordination(PS_relabund_filt, PS_relabund_filt.ord, type="samples", color="Stage", title="taxa")
+PCoA1 + 
+  stat_ellipse(aes(fill = Stage), geom = "polygon", alpha = 0.2, color = NA) +
+  geom_point(size = 3) +
+  theme_classic()
+```
+
