@@ -1,7 +1,7 @@
 # Check-In 2: New progress since last submission
 
 - Generating figures using 16S asv table (both recreating figures from paper and creating our own)
-- All code in "Figure_Attempt.Rmd" along with all rendered figures
+- All code in "Figure_Attempt (1).Rmd" along with all rendered figures (plz open in R studio to see all code block outputs)
 
 | Reproduction | Original Figure |
 |--------|---------|
