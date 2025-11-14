@@ -22,8 +22,9 @@
 - Processing using metaSPADES in Galaxy browser
 - Running analysis with subset (10 samples)
 - Paired end with auto-kmer detection, samples do not belong to the same library
-- After a full day running on the browser, we got this error and we are not sure how to proceed from here
+- After a full day running on the browser, we got this error
 - ![](metaSPADESerror.png)
+- This could be because there is not enough disk space/storage capacity, unsure how to proceed from here (may need to run this on something other than cmdb laptop)
 - In the meantime, recreating figures based on data provided with paper (eventually will replace with our own analysis)
 
 | 16S | Metagenomic |
