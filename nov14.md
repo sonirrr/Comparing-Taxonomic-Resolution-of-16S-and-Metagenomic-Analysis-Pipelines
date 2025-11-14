@@ -29,7 +29,7 @@
 
 | 16S | Metagenomic |
 |--------|---------|
-| ![](metavenn.png) | ![](originalmetavenn.png) |
+| ![](16svenn.png) | ![](metavenn.png) |
 | ![](16sstackedbarchartgenus.png) | ![](metastackedbarchartgenus.png)
 | ![](16srichness.png) | ![](metarichness.png)
 
