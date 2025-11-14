@@ -251,10 +251,11 @@ p1 + geom_bar(aes(color=Genus, fill=Genus), stat="identity", position="stack") +
 
 ```
 
+
 ```{r}
-PS_relabund_filt.ord <- ordinate(PS_relabund_filt, "PCoA")
-PCoA1 = plot_ordination(PS_relabund_filt, PS_relabund_filt.ord, type="samples", color="Stage", title="taxa")
-PCoA1 + 
+PS_meta_relabund_filt.ord <- ordinate(PS_meta_relabund_filt, "PCoA")
+PCoA2 = plot_ordination(PS_meta_relabund_filt, PS_meta_relabund_filt.ord, type="samples", color="Stage", title="taxa")
+PCoA2 + 
   stat_ellipse(aes(fill = Stage), geom = "polygon", alpha = 0.2, color = NA) +
   geom_point(size = 3) +
   theme_classic()
