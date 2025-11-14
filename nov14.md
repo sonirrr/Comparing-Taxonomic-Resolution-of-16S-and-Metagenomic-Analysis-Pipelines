@@ -29,6 +29,7 @@
 | 16S | Metagenomic |
 |--------|---------|
 | ![](metavenn.png) | ![](originalmetavenn.png) |
+| ![](16sstackedbarchartgenus.png) | ![](metastackedbarchartgenus.png)
 
 ### Initial observations 
 - Number of shared taxonomic differences is different but trend is the same
