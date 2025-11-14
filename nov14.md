@@ -35,8 +35,10 @@
 | ![](16spcoa.png) | ![](metapcoa.png)
 
 ### Initial observations 
-- Number of shared taxonomic differences is different but trend is the same
-- Genus level bar charts are hard to intepret (too many genera), working on phylum level bar charts for better comparison
+- From venn diagrams: number of shared taxonomic units is different between metagenomic and 16S analyses but trend is still consistent
+- From genus level bar charts: these are hard to intepret (too many genera), working on phylum level bar charts for better comparison
+- Richness charts are also consistent between 16S and metagenomic analyses
+- From PCOA charts: metagenomic separation is more apparent, may suggest metagenomic approach is better at capturing  microbiome profile differences
   
 ## Still to be done (metagenomic analysis)
 - Fix error with the Galaxy browser and run metaSPADES on subset of samples
